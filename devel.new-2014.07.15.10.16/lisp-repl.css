@@ -1,0 +1,10 @@
+* {margin: 0; padding: 0; border: 0 none; font: 13px "Courier New", "DejaVu Sans Mono", monospace;}
+
+form {margin-left: -1px; /* Firefox includes a small extra padding on the edge of input */}
+input {width: 100%;}
+
+#page {position: fixed; top: 0; right: 0; bottom: 0; left: 0; overflow: auto;}
+#results {white-space: pre-wrap;}
+#tag, #form-area {display: table-cell;}
+#tag {padding-right: 8px;}
+#form-area {width: 100%;}
