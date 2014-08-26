@@ -4,6 +4,7 @@
 /* require lisp-parse */
 /* require lisp-tools */
 /* require lisp-exec */
+/* require lisp-compile-basic */
 
 var udfp = $.udfp;
 var dmp = $.dmp;
@@ -71,6 +72,8 @@ L.jn("*out*", function (a){
 });
 
 sefn(cmb(out, dmp));
+
+L.evlf("lib/lisp-compile-basic.lisp");
 
 //L.exe(get("/codes/apps/lisp-repl/devel7/lisp-test.lisp"));
 
