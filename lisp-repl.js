@@ -1,9 +1,12 @@
 /***** Lisp REPL Devel *****/
 
 /* require tools >= 3.0 */
-/* require lisp-parse */
+/* require ajax */
+/* require prec-math */
 /* require lisp-tools */
+/* require lisp-parse */
 /* require lisp-exec */
+/* require lisp-core */
 /* require lisp-compile-basic */
 
 var udfp = $.udfp;
