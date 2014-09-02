@@ -37,3 +37,10 @@
   (prn "   Entering baz")
   (f)
   (prn "   Leaving baz"))
+  
+(for i 1 100
+  (with (d3 (divp i 3) d5 (divp i 5))
+    (if (and d3 d5) (prn "FizzBuzz")
+        d3 (prn "Fizz")
+        d5 (prn "Buzz")
+        (prn i))))
