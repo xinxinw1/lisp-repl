@@ -33,7 +33,8 @@
 
 (mac nfn (a) `(fn (_) ,a))
 
-(mac blk a
+; simple block
+(mac sblk a
   `((fn () ,@a)))
 
 (mac let (a x . bd)
@@ -95,8 +96,19 @@
 (mac afn (ag . bd)
   `(rfn self ,ag ,@bd))
 
-(mac mlet (a . bd)
-  `(let ,(car a) (mc ,@(cdr a)) ,@bd))
+(mac mlet ((nm . mbd) . bd)
+  `(let ,nm (mc ,@mbd) ,@bd))
+
+(mac mwith (as . bd)
+  `(with ,(mapapp [lis (car _) `(mc ,@(cdr _))] as) ,@bd))
+
+(mac mover (nm ag . bd)
+  `(let sup ,nm
+     (= ,nm (mc ,ag ,@bd))))
+
+(mac moverlet ((nm . mbd) . bd)
+  `(let ,nm (let sup ,nm (mc ,@mbd))
+     ,@bd))
 
 (mac rwith (nm vs . bd)
   (let g (grp vs 2)
@@ -206,8 +218,62 @@
       (sym? (car vs)) (gslis (cdr gens) (cdr vs))
       (app (lis (car gens) (car vs)) (gslis (cdr gens) (cdr vs)))))
 
+(mac retfr (s r)
+  `(err nil "Unknown block $1" ',s))
+
+#|
+(block a
+  (prn " Entering BLOCK")
+  (bar [retfr a])
+  (prn " Leaving BLOCK"))
+
+->
+
+(with (gs1 (lis nil) gs2 retfr)
+  (let retfr (mc (s r)
+               (if (is s 'a) `(thr gs1 ,r)
+                   `(gs2 ,s ,r)))
+    (cat gs1
+      (prn " Entering BLOCK")
+      (bar [retfr a])
+      (prn " Leaving BLOCK"))
+|#
+
+(mac blk (v . bd)
+  `(with (#g (lis nil) #retfr retfr)
+     (mlet (retfr (s r)
+             (if (is s ',v) `(thr #g ,r)
+                 `(#retfr ,s ,r)))
+       (cat #g ,@bd))))
+
+(mac bdef (nm ag . bd)
+  `(def ,nm ,ag (blk ,nm ,@bd)))
+
+(mac brfn (nm ag . bd)
+  `(rfn ,nm ,ag (blk ,nm ,@bd)))
+
+#|
+(loop (var i 0) (< i 10) (++ i)
+  (if (is i 3) (cont))
+  (prn i))
+->
+(sblk
+  (mlet (cont () `(retfr #g))
+    (var i 0)
+    (while (< i 10)
+      (blk #g
+        (if (is i 3) (cont))
+        (prn i))
+      (++ i))))
+|#
+
 (mac loop (st p up . bd)
-  `(blk ,st (while ,p ,@bd ,up)))
+  `(sblk
+     (mlet (cont () `(retfr #g))
+       ,st
+       (while ,p
+         (blk #g ,@bd)
+         ,up))))
 
 (mac for (i n m . bd)
   (once (n m)
@@ -234,10 +300,14 @@
   `(down #i ,n 1 ,@bd))
 
 (mac each (x a . bd)
-  `(eachfn ,a (fn (,x) ,@bd)))
+  `(mlet (cont () `(retfr #g))
+     (eachfn ,a
+       (brfn #g (,x) ,@bd))))
 
 (mac oeach (i x a . bd)
-  `(oeachfn ,a (fn (,i ,x) ,@bd)))
+  `(mlet (cont () `(retfr #g))
+     (oeachfn ,a
+       (brfn #g (,i ,x) ,@bd))))
 
 (mac nofcol (n a)
   `(let #g nil
@@ -343,10 +413,10 @@
 (mac tags a
   (let (beftag . s) (splbef a sym?)
     `(mlet (go (a) `(ret (,a)))
-        (blk ,@beftag
-             ,@(let g (maplis [lisd (caar _) (caadr _) (cdar _)] s)
-                 (map mktag1 g))
-             (,(caar s))))))
+        (sblk ,@beftag
+              ,@(let g (maplis [lisd (caar _) (caadr _) (cdar _)] s)
+                  (map mktag1 g))
+              (,(caar s))))))
 
 (def maplis (f a)
   (if (no a) nil
@@ -378,9 +448,8 @@
 (mac dyn (a x . bd)
   `(let #ori ,a
      (= ,a ,x)
-     (let #ret (do ,@bd)
-       (= ,a #ori)
-       #ret)))
+     (prot (do ,@bd)
+       (= ,a #ori))))
 
 (mac sta (a x . bd)
   `(do (psh ,x ,a)
@@ -436,3 +505,62 @@
       `(let #r ,(car a)
          ,@(cdr a)
          #r)))
+
+#|
+(smlet a '(lis 1 2 3)
+  a)
+|#
+(mac smlet (a x . bd)
+  `(let ,a (smc ,x) ,@bd))
+
+(mac smwith (vs . bd)
+  `(with ,(mapapp [lis (car _) `(smc ,(cadr _))] (grp vs 2))
+     ,@bd))
+
+(mac olay (a)
+  `(= ,a {0 ,a}))
+
+(mac oulay (a)
+  `(= ,a (,a 0)))
+
+(mac mkoacc (nm pre)
+  `(do (var ,nm {})
+       (def ,(app pre 'ref) (a) (oref ,nm a))
+       (def ,(app pre 'put) (a x) (oput ,nm a x))
+       (def ,(app pre 'set) (a x) (oset ,nm a x))
+       (def ,(app pre 'set?) (a) (oset? ,nm a))
+       (def ,(app pre 'del) (a) (odel ,nm a))
+       (def ,(app pre 'ren) (a b) (oren ,nm a b))
+       (def ,(app pre 'lay) () (olay ,nm))
+       (def ,(app pre 'ulay) () (oulay ,nm))))
+
+(def las (a)
+  (if (no a) nil
+      (no (cdr a)) (car a)
+      (las (cdr a))))
+
+(def but (a)
+  (if (no a) nil
+      (no (cdr a)) nil
+      (cons (car a) (but (cdr a)))))
+
+(mac bug a
+  `(let #g (lis ,@a)
+     (al ,(joi (mapi (fn (_ i) (str _ " = $" i)) a 1) " | ") @#g)
+     (las #g)))
+
+(mac bugn (nm . a)
+  `(let #g (lis ,@a)
+     (al (str ,nm " | "
+              ,(joi (mapi (fn (_ i) (str _ " = $" i))
+                          a 1)
+                    " | "))
+         @#g)
+     (las #g)))
+
+(mac bugm (nm . a)
+  `(do ,@(map [qq (bugn ,nm ,_)] a)))
+
+(def mapi (f a (o i 0))
+  (if (no a) nil
+      (cons (f (car a) i) (mapi f (cdr a) (+ i 1)))))
