@@ -1,9 +1,10 @@
 ;;;; Compiler ;;;;
 
 #|
-To run:
-js> L.evlf("/codes/libjs/lisp-compile-basic/devel/lisp-compile-basic.lisp")
-lisp> (cmpp "(js-blk (js-do 1 2 3))")
+Examples:
+
+(prn (cmp '(js-loop (set x 3) (lt x 5) (pp x) (js-def hey (a b c) (js-if test 1 2 3 4 5)) 3 4 5)))
+
 |#
 
 ;;; Main compile ;;;
@@ -11,193 +12,341 @@ lisp> (cmpp "(js-blk (js-do 1 2 3))")
 (def cmp (a)
   (proc (cmp1 a)))
 
+; numbers are sent to the cal js procedure
+; symbols are sent to sym
+; strings are sent to str
+; nil is sent to sym as 'nil
+; the cal procedure is used for calls that aren't
+;   defined as procedures or macros
+
 (def cmp1 (a)
   (if (atm? a)
     (case a
-      nil? (cmp1 'nil)
-      num? (cmp1 (lis 'js-num a))
-      sym? (cmp1 (lis 'js-sym a))
-      str? (cmp1 (lis 'js-str a))
+      nil? (send 'nil)
+      num? (call num a)
+      sym? (if (smset? a) (send (xsmcal a))
+               (call sym a))
+      str? (call str a)
       (err cmp1 "Unknown atom a = $1" a))
-    (let b (car a)
-      (if (atm? b)
-            (if (sym? b) (cprc b (cdr a))
-                (cmp1 (cons 'js-cal a)))
-          (cmp1 (cons 'js-cal a))))))
+    (cmp1l (car a) (cdr a))))
+
+(def cmp1l (e a)
+  (if (atm? e)
+    (if (sym? e)
+      (if (smset? e) (send (cons (xsmcal e) a))
+          (mset? e) (send (xmcal e a))
+          (sset? e) (xscal e a)
+          (cprc e @a))
+      (call cal e @a))
+    (cmp1ll (car e) (cdr e) a)))
+
+(def cmp1ll (e a b)
+  (if (atm? e)
+    (if (sym? e)
+      (if (mmset? e) (send (xmmcal e a b))
+          (call cal (cons e a) @b))
+      (call cal (cons e a) @b))
+    (call cal (cons e a) @b)))
+
+#|
+(send a) -> compile a
+(call p @a) -> call jsprc p with args a
+(chan a) -> cancel current compilation and (send a) instead
+(pass p @a) -> cancel current compilation and (call p @a) instead
+|#
+
+(def send (a)
+  (cmp1 a))
+
+(mac call (p . a)
+  ;(al "res = $1" `(send (lis ',(app 'js- p) ,@a)))
+  `(send (lis ',(app 'js- p) ,@a)))
 
 ;;; Procedures ;;;
 
 (var *prcs* {})
 
-#|(var *curropt* {})
-(mac opt (a x)
-  `(do (= (. *curropt* ,a) ,x)
-       nil))
-
-(def opts (ob)
-  (oeach i x ob
-    (= (*curropt* i) x)))
-
-(mac defprc (nm ag . bd)
-  `(= (. *prcs* ,nm)
-      (fn ,ag
-        (dyn *curropt* {}
-          (rt ',nm (lin ,@bd) *curropt*)))))|#
-
-(mac defspc (nm ag . bd)
-  `(= (. *prcs* ,nm)
-      (fn ,ag ,@bd)))
-
 (var *curropt* {})
 
-(mac opt (a b)
-  `(do (= (. *curropt* ,a) ,b)
+; set option nm to val
+(mac opt (nm val)
+  `(do (= (. *curropt* ,nm) ,val)
        nil))
 
-#|(def opsfr1 (ob a)
-  `(do (al "ob = $1 | a = $2 | has = $3" ,ob ',a (ohas (getopt ,ob) ',a))
-       (if (ohas (getopt ,ob) ',a) (opt ,a (. (getopt ,ob) ,a)))))|#
-
 (def opsfr1 (ob a)
-  `(if (ohas (getopt ,ob) ',a) (opt ,a (. (getopt ,ob) ,a))))
+  `(if (ohas (. ,ob opt) ',a) (opt ,a (. ,ob opt ,a))))
 
+; use options in a from rt obj ob
 (mac opsfr (ob . a)
   `(do ,@(map [opsfr1 ob _] a)))
 
+; copy options in ops from rt obj in (do @a) and return rt obj
 (mac cpops (ops . a)
   `(let #r (do ,@a)
      (opsfr #r ,@ops)
      #r))
 
-(mac prc (nm . bd)
-  `(dyn *curropt* {}
-     (rt ',nm (do ,@bd) *curropt*)))
-
+; define procedure
 (mac defprc (nm ag . bd)
-  `(defspc ,nm ,ag
-     (prc ,nm ,@bd)))
-
-#|(prc do (cdo a))
-
-#|(mac defprc (nm ag . bd)
   `(= (. *prcs* ,nm)
-      (fn ,ag ,@bd)))|#
+      (fn ,ag
+        (blk ,nm
+          (mwith ((chan (a) `(retfr ,,nm (send ,a)))
+                  (pass (p . a)
+                    `(retfr ,,nm (call ,p ,@a))))
+            (dyn *curropt* {}
+              (rt ',nm (do ,@bd) *curropt*)))))))
 
-(def cprc (p a)
+(def cprc (p . a)
   (if (beg p 'js-)
         (let f (*prcs* (sli p 3))
           (if (no f) (err cprc "Unknown p = $1" p)
-              (apl f a)))
-      (cmp1 (lisd 'js-cal p a))))
+              (f @a)))
+      (call cal p @a)))
+
+;;; Macros ;;;
+
+(mkoacc spec s)
+(mkoacc macs m)
+(mkoacc smacs sm)
+(mkoacc mmacs mm)
+
+; mmacs can be used to optimize exprs like
+;   ((dtfn test) a x y z)
+;   to ((. a test) x y z)
+;   or ((combine f g) a b c)
+;   to (f (g a b c))
+
+(def xscal (e a)
+  ((sref e) @a))
+
+(def xmcal (e a)
+  ((mref e) @a))
+
+(def xsmcal (a)
+  ((smref a)))
+
+(def xmmcal (e a b)
+  ((mmref e) a b))
+
+; (xmac ...) should be the same thing as running
+;   (js-mac ...) in the compiler
+(mac xmac (nm ag . bd)
+  `(mput ',(app 'js- nm) (fn ,ag ,@bd)))
+
+(xmac exe a
+  (evl `(do ,@a)))
+
+(xmac mac (nm ag . bd)
+  (mput nm (evl `(fn ,ag ,@bd)))
+  nil)
+
+(xmac dmac (nm)
+  (mdel nm)
+  nil)
+
+(xmac rmac (fr to)
+  (mren fr to)
+  nil)
+
+(xmac smac (nm . bd)
+  (smput nm (evl `(fn () ,@bd)))
+  nil)
+
+(xmac dsmac (nm)
+  (smdel nm)
+  nil)
+
+(xmac rsmac (fr to)
+  (smren fr to)
+  nil)
+
+(xmac mmac (nm ag1 ag2 . bd)
+  (mmput nm (evl `(fn (,ag1 ,ag2) ,@bd)))
+  nil)
+
+(xmac dsmac (nm)
+  (mmdel nm)
+  nil)
+
+(xmac rsmac (fr to)
+  (mmren fr to)
+  nil)
+
+; special procedures are not compiled again after they are run
+; this means the return value should already be compiled
+(mac xspec (nm ag . bd)
+  `(sput ',(app 'js- nm) (fn ,ag ,@bd)))
+
+(xspec cdo1 (a . bd)
+  (let r (send a)
+    (send `(do ,@bd))
+    r))
+
+(xspec mblk a
+  (mlay)
+  (let r (send `(do ,@a))
+    (mulay)
+    r))
+
+(xspec smblk a
+  (smlay)
+  (let r (send `(do ,@a))
+    (smulay)
+    r))
+
+(xspec mmblk a
+  (mmlay)
+  (let r (send `(do ,@a))
+    (mmulay)
+    r))
+
+(mac xmmac (nm ag1 ag2 . bd)
+  `(mmput ',(app 'js- nm) (fn (,ag1 ,ag2) ,@bd)))
+
+; ((dtfn a b c) x 1 2 3)
+; -> ((. x a b c) 1 2 3)
+(xmmac dtfn a (x . args)
+  `((. ,x ,@a) ,@args))
+
+; ((combine a b c) 1 2 3)
+; -> (a (b (c 1 2 3)))
+(xmmac combine fs args
+  (foldr lis `(,(las fs) ,@args) (but fs)))
 
 ;;; Places ;;;
 
-(def send (a)
-  (cmp1 a))
-
 ; *ps* = places
 (var *ps* nil)
-#|(over cmp (a (o p))
-  (if (no p) (sup a)
-      (cpla p (send a))))|#
 
 (mac stapla (p . a)
   `(sta *ps* ,p ,@a))
 
 (mac wpla (p a)
-  `(stapla ,p (place ,a *ps*)))
+  `(stapla ,p (place ,a)))
 
 (mac cpla (p a)
   `(wpla ,p (send ,a)))
 
-#|
-(over cmp (a (o p))
-  (if (no p) (sup a)
-      (inpla p (cmp1 a))))
-|#
+(def currpla ()
+  (car *ps*))
 
-(def place (a ps)
+(def getps ()
+  *ps*)
+
+; does any operations (such as adding parens, order of operations)
+;   needed to put a into the env defined by *ps*;
+;   should be overridden for the target language
+(def place (a)
   a)
 
+; compile all in list a in place p
 (def cpa (p a)
   (map [cpla p _] a))
 
+; define place; should be overridden to define options that
+;   will be used by place
 (mac defpla (a . opt)
   nil)
 
+; define rt (return object)
 (mac defrt (a . opt)
   nil)
 
 ;;; JS Places ;;;
 
+; block places include the top level, inside a function, a while, an if...
+; a block rt is anything that needs to be placed inside a block
+
 (var *blkpla* nil)
 (var *blkrts* nil)
 
-(def inblk? (ps)
-  (has (car ps) *blkpla*))
+(def inblk? ()
+  (or (no (currpla))
+      (has (currpla) *blkpla*)))
 
 (def blk? (a)
-  (has (gettp a) *blkrts*))
+  (has (. a tp) *blkrts*))
+
+; return places include the end of a function and inside
+;   a ret expression
+; an end place is a place that carries over returns, but isn't a
+;   ret place itself
 
 (var *retpla* nil)
 (var *endpla* nil)
 
-(def inret? (ps)
+(def inret? ((o ps (getps)))
   (if (no ps) nil
       (has (car ps) *retpla*) t
       (has (car ps) *endpla*) (inret? (cdr ps))
       nil))
 
+; the ret rt option signals whether the code inside always returns
+; the thr option signals whether the code always throws
+; the brk option signals whether the code always breaks
+; exi? says whether the code always exits, whether by ret, thr, or brk
+
 (def ret? (a)
-  (. (getopt a) ret))
+  (. a opt ret))
 
 (def thr? (a)
-  (. (getopt a) thr))
+  (. a opt thr))
 
 (def brk? (a)
-  (. (getopt a) brk))
+  (. a opt brk))
 
 (def exi? (a)
   (or (ret? a) (thr? a) (brk? a)))
 
+; the bra option says whether the code needs braces
 (def bra? (a)
-  (. (getopt a) bra))
+  (. a opt bra))
 
 (def needbra? (a)
-  (unless (rt? a) (err needbra? "a = $1 must be a rt" a))
-  (and (ohas (getopt a) 'bra)
+  (unless (is (. a typ) 'rt) (err needbra? "a = $1 must be a rt" a))
+  (and (ohas (. a opt) 'bra)
        (bra? a)))
 
 (def mkbra (a)
   (lns "{" (ind 2 a) "}"))
 
+; add bracket if a needs it
 (def chkbra (a)
   (if (needbra? a) (mkbra a)
       a))
 
-#|(def chkbra (a)
-  (if (needbra? a) (lns "{" (ind 2 a) "}")
-      (no a) ";"
-      (car a)))|#
+; *reqbrac* is a list of lists
+; each list is of the form (rt pl) which specifies that
+;   when a rt obj of type rt is placed in a place pl, it requires brackets
+(var *reqbrac* nil)
 
-#|(def needbra? (a)
-  (slis a
-    (if (no a) nil
-        (cdr a)
-        (has (gettp (car a)) *brarts*) t
-        nil)))|#
+; ex. (defreq doln inln)
+(mac defreq (rt pl)
+  `(psh '(,rt ,pl) *reqbrac*))
 
+; ex. (reqbrac 'doln 'inln)
+(def reqbrac? (rt pl)
+  (has [iso _ (lis rt pl)] *reqbrac*))
 
-
-(def place (a ps)
-  (if (inblk? ps)
-        (if (no (blk? a))
-              (if (no (inret? ps)) (mapa [lin _ ";"] a)
-                  (rt (gettp a) (lin "return " (geta a) ";")
-                      (owith (getopt a) 'ret t)))
-            a)
+; a should always be a rt
+(def place (a)
+  ;(bugm "place" a (inblk?) (blk? a) (inret?))
+  (if (inblk?)
+        (if (blk? a) a
+            (no (inret?))
+              (do (when (is (. a tp) 'fn)
+                    (= a (mapdat [lin "(" _ ")"] a)))
+                  (mapdat [lin _ ";"] a))
+            (rt (. a tp) (lin "return " (. a dat) ";")
+                (owith (. a opt) 'ret t)))
+      (blk? a) (err place "Can't place blk $1 inside inline place $2"
+                          a (currpla))
+      (reqbrac? (. a tp) (currpla))
+        (mapdat [lin "(" _ ")"] a)
       a))
 
+; define whether your place is a blk or a ret or end
 (mac defpla (a . opt)
   `(with (#a ',a #opt '(,@opt))
      (if (has 'blk #opt) (psh #a *blkpla*))
@@ -205,6 +354,7 @@ lisp> (cmpp "(js-blk (js-do 1 2 3))")
      (if (has 'end #opt) (psh #a *endpla*))
      nil))
 
+; define whether your rt is a blk
 (mac defrt (a . opt)
   `(with (#a ',a #opt '(,@opt))
      (if (has 'blk #opt) (psh #a *blkrts*))
@@ -221,20 +371,38 @@ lisp> (cmpp "(js-blk (js-do 1 2 3))")
 (defprc str (a)
   (dsp a))
 
+; is a already a js variable
 (def jvar? (a)
   (has #"^[a-zA-Z$_][a-zA-Z0-9$_]*$" a))
 
+; is a suitable for conversion?
 (def var? (a)
-  (has #"^[a-zA-Z$_][a-zA-Z0-9$_?-]*$" a))
+  (has #"^\*?[a-zA-Z$_*/+-^=!][a-zA-Z0-9$_*/+-^=!?-]*\*?$" a))
 
+; convert lisp sym to js variable
+; todo: *var* -> VAR
+; * -> mul
+; / -> div
+; + -> add
+; - -> sub
+; ^ -> pow
+; ! -> bang
+; ? -> p
+; a-test -> aTest
 (def jvar (a)
   (if (jvar? a) (str a)
       (var? a)
         (let s ""
           (idx i a
             (case (a i)
-              '- (do (app= s (upp (a (+ i 1))))
-                      (++ i))
+              '- (if (is i 0) (app= s "sub")
+                   (do (app= s (upp (a (+ i 1))))
+                       (++ i)))
+              '* (app= s "mul")
+              '/ (app= s "div")
+              '+ (app= s "add")
+              '^ (app= s "pow")
+              '! (app= s "bang")
               '? (app= s "p")
               (app= s (a i))))
           s)
@@ -246,93 +414,119 @@ lisp> (cmpp "(js-blk (js-do 1 2 3))")
 (def mpar (a)
   (lin "(" (btwa (cpa 'inln a) ", ") ")"))
 
-(defprc blk a
-  (opt bra t)
-  (if (no a) "{}"
-      (lns "{" (ind 2 (inpla 'blk (cdo a))) "}")))
+(defprc do a
+  (if (no a) (chan nil)
+      (no (cdr a)) (chan (car a))
+      (inblk?) (cdo @a)
+      (pass doln @a)))
 
-(defpla blk blk ret)
-(defrt blk blk)
+(def cdo a
+  (let fst (cpla 'do (car a))
+    (if (redun? fst) (pass do @(cdr a))
+        (do (opt bra t)
+            (lns fst (cdo2 @(cdr a)))))))
 
-(defprc whi (ts . a)
-  (opt bra t)
-  (lin "while (" (cmp ts 'bot) ")"
-       (if (no a) ";"
-           (chkbra (inpla 'lop (cdo a))))))
-
-(defpla lop blk)
-(defrt whi blk)
-
-#|(defprc lop (st ts up . a)
-  (rt 'lop
-    (lin "for (" (cmp st 'forbeg) "; "
-                 (cmp ts 'bot) "; "
-                 (cmp up 'bot) ")"
-         (chkbra (cmp (cons 'js-do a) 'lop)))))|#
-
-(defspc do a (cdo a))
-
-(def cdo (a)
-  (if (no a) (cmp1 nil)
-      (no (cdr a)) (cmp1 (car a))
-      (let fst (cmp (car a) 'do)
-        (if (redun? fst) (cdo (cdr a))
-            (prc do
-              (opt bra t)
-              (lns fst (cdo1 (cdr a))))))))
-
-(def cdo1 (a)
+; same as cdo but don't pass to do and process last one differently
+(def cdo2 a
   (if (no (cdr a))
-        (let r (cmp (car a) 'dolas)
-          (opsfr r ret thr brk)
-          r)
-      (let fst (cmp (car a) 'do)
-        (if (redun? fst) (cdo1 (cdr a))
-            (lns fst (cdo1 (cdr a)))))))
+        (cpops (ret thr brk)
+          (cpla 'dolas (car a)))
+      (let fst (cpla 'do (car a))
+        (if (redun? fst) (cdo2 @(cdr a))
+            (lns fst (cdo2 @(cdr a)))))))
 
 (defpla do blk)
 (defpla dolas blk end)
 (defrt do blk)
 
+(defprc doln a
+  (if (no a) (chan nil)
+      (no (cdr a)) (chan (car a))
+      (cdoln @a)))
+
+(def cdoln a
+  (let fst (cpla 'doln (car a))
+    (if (redun? fst) (pass do @(cdr a))
+        (lin fst ", " (cdoln2 @(cdr a))))))
+
+; same as cdoln but don't pass to do
+(def cdoln2 a
+  (let fst (cpla 'doln (car a))
+    (if (no (cdr a)) fst
+        (redun? fst) (cdoln2 @(cdr a))
+        (lin fst ", " (cdoln2 @(cdr a))))))
+
+; putting a doln rt into an inln pla requires brackets
+(defreq doln inln)
+
 (def redun? (a)
-  ;(al "orig = $1" (getorig a))
-  (and (is (gettp a) 'sym) (is (getorig a) "nil")))
+  ;(al "a = $1" a)
+  ;(al "orig = $1" (. a opt orig))
+  (and (is (. a tp) 'sym) (is (. a opt orig) "nil")))
 
-(defspc if a (cif a))
+(defprc whi (ts . bd)
+  (opt bra t)
+  (lin "while (" (cpla 'bot ts) ")"
+       (if (no bd) ";"
+           (chkbra (wpla 'lop (call do @bd))))))
 
-(def cif (a)
-  (if (no a) (cmp1 nil)
-      (no (cdr a)) (cmp1 (car a))
-      (prc if
-        (opt bra t)
-        (cif1 a))))
+(defpla lop blk)
+(defrt whi blk)
 
-(def cif1 (a)
-  (if (no a) (cmp nil 'if)
-      (no (cdr a)) (cmp (car a) 'if)
-      (with (ts (cmp (car a) 'bot)
-             yes (cmp (cadr a) 'if))
+(defprc loop (st p up . bd)
+  (opt bra t)
+  (lin "for (" (cpla 'forbeg st) "; "
+               (cpla 'bot p) "; "
+               (cpla 'bot up) ")"
+       (if (no bd) ";"
+           (chkbra (wpla 'lop (call do @bd))))))
+
+(defrt loop blk)
+
+(defprc if a
+  (if (no a) (chan nil)
+      (no (cdr a)) (chan (car a))
+      (inblk?) (do (opt bra t)
+                   (cif1 @a))
+      (pass ifln @a)))
+
+(def cif1 a
+  (if (no a) (cpla 'if nil)
+      (no (cdr a)) (cpla 'if (car a))
+      (with (ts (cpla 'bot (car a))
+             yes (cpla 'if (cadr a)))
         (opsfr yes ret thr brk)
         (if (exi? yes)
               (lns (lin "if (" ts ")" (chkbra yes))
-                   (cif1 (cddr a)))
+                   (cif1 @(cddr a)))
             (needbra? yes)
-              (lin "if (" ts ")" (chkbra yes) " " (celif (cddr a)))
+              (lin "if (" ts ")" (chkbra yes) " " (celif @(cddr a)))
             (lns (lin "if (" ts ")" (chkbra yes))
-                 (celif (cddr a)))))))
+                 (celif @(cddr a)))))))
 
-(def celif (a)
+(def celif a
   (if (no a) nil
-      (no (cdr a)) (lin "else " (chkbra (cmp (car a) 'if)))
-      (with (ts (cmp (car a) 'bot)
-             yes (cmp (cadr a) 'if))
+      (no (cdr a)) (lin "else " (chkbra (cpla 'if (car a))))
+      (with (ts (cpla 'bot (car a))
+             yes (cpla 'if (cadr a)))
         (if (needbra? yes)
-              (lin "else if (" ts ")" (chkbra yes) " " (celif (cddr a)))
+              (lin "else if (" ts ")" (chkbra yes) " " @(celif (cddr a)))
             (lns (lin "else if (" ts ")" (chkbra yes))
-                 (celif (cddr a)))))))
+                 (celif @(cddr a)))))))
 
 (defpla if blk end)
 (defrt if blk)
+
+(defprc ifln a
+  (if (no a) (chan nil)
+      (no (cdr a)) (chan (car a))
+      (cifln2 @a)))
+
+(def cifln2 (ts yes nop . rst)
+  (lvl (lin (cpla 'iflntest ts) "?"
+            (cpla 'iflnyes yes) ":"
+            (if (no rst) (cpla 'iflnno nop)))
+       (if rst (cifln2 @rst))))
 
 (defprc ret (a)
   (cpops (ret thr brk bra) 
@@ -341,11 +535,6 @@ lisp> (cmpp "(js-blk (js-do 1 2 3))")
 (defpla ret blk ret)
 (defrt ret blk)
 
-#|
-(defspc ret (a)
-  (wpla 'ret (cmp1 a)))
-|#
-
 (defprc nret (a)
   (cpops (ret thr brk bra)
     (cpla 'nret a)))
@@ -353,187 +542,129 @@ lisp> (cmpp "(js-blk (js-do 1 2 3))")
 (defpla nret blk)
 (defrt nret blk)
 
-#|
 (defprc fn (ag . bd)
-  (lns (lin "function (" (joi ag ", ") "){")
-       (wpla 'blk (call do bd))))
+  (lns (lin "function " (mpar ag) "{")
+       (ind 2 (wpla 'blk (call do @bd)))
+       "}"))
 
-(defprc do a
-  (if (no a) (chan nil)
-      (no (cdr a)) (chan (car a))
-      (let fst (cpla 'do (car a))
-        (if (redun? fst) (pass do (cdr a))
-            (do (opt bra t)
-                (lns fst (cdo1 @(cdr a))))))))
+#|(defprc blk a
+  (opt bra t)
+  (if (no a) "{}"
+      (lns "{" (ind 2 (inpla 'blk (cdo a))) "}")))|#
 
-(def cdo1 a
-  (if (no (cdr a))
-        (cpops (ret thr brk)
-          (cpla 'dolas (car a)))
-      (let fst (cpla 'do (car a))
-        (if (redun? fst) (cdo1 @(cdr a))
-            (lns fst (cdo1 @(cdr a)))))))
+(defpla blk blk ret)
+(defrt fn)
 
-(defprc if a
-  (if (no a) (chan nil)
-      (no (cdr a)) (chan (car a))
-      (do (opt bra t)
-          (cif1 a))))
+(defprc def (nm ag . bd)
+  (opt bra t)
+  (lns (lin "function " (call sym nm) (mpar ag) "{")
+       (ind 2 (wpla 'blk (call do @bd)))
+       "}"))
 
-(def cif1 (a)
-  (if (no a) (cpla 'if nil)
-      (no (cdr a)) (cpla 'if (car a))
-      (with (ts (cpla 'bot (car a))
-             yes (cpla 'if (cadr a)))
-        (opsfr yes ret thr brk)
-        (if (exi? yes)
-              (lns (lin "if (" ts ")" (chkbra yes))
-                   (cif1 (cddr a)))
-            (needbra? yes)
-              (lin "if (" ts ")" (chkbra yes) " " (celif (cddr a)))
-            (lns (lin "if (" ts ")" (chkbra yes))
-                 (celif (cddr a)))))))
+(defrt def blk)
 
-(def celif (a)
-  (if (no a) nil
-      (no (cdr a)) (lin "else " (chkbra (cpla 'if (car a))))
-      (with (ts (cpla 'bot (car a))
-             yes (cpla 'if (cadr a)))
-        (if (needbra? yes)
-              (lin "else if (" ts ")" (chkbra yes) " " (celif (cddr a)))
-            (lns (lin "else if (" ts ")" (chkbra yes))
-                 (celif (cddr a)))))))
+
+
+;;; Lines ;;;
+
+(def mklnobj (typ ob)
+  (app ob {typ typ}))
+
+#| line:
+(prn (proc (lin "" "test" "" "" "test"))) ->
+testtest
 |#
 
-#|(def mkdo (a p)
-  (if (no a) nil
-      (atm? a) (err cpalas "Can't cmp improper list a = $1" a)
-      (no (cdr a))
-        (let r (cmp (car a) (app p 'las))
-          (opt (getopt r))
-          (lis r))
-      (cons (cmp (car a) p) (mkdo (cdr a) p))))|#
-
-#|(defprc do2 a
-  (if (no a) (cmp0 nil)
-      (let fst (cmp (car a) 'do)
-        (if (redun? fst) (cmp0 (cadr a))
-            (lns fst (cmp (cadr a) 'dolas))))))|#
-
-#|(def cpalas (a p)
-  (if (no a) nil
-      (atm? a) (err cpalas "Can't cmp improper list a = $1" a)
-      (no (cdr a)) (lis (let r (cmp (car a) (app p 'las))
-                           (opts (getopt r))
-                           r))
-      (cons (cmp (car a) p) (cpalas (cdr a) p))))|#
-
-#|(defprc if a (cif a))
-
-(def cif (a)
-  (if (no a) (cmp0 nil)
-      (no (cdr a)) (cmp (car a) 'if)
-      (with (ts (cmp (car a) 'bot)
-             yes (cmp (cadr a) 'if))
-        (opts (getopt yes))
-        (if (exi? yes)
-              (lns (lin "if (" ts ")" (chkbra yes))
-                   (cif (cddr a)))
-            (needbra? yes)
-              (lin "if (" ts ")" (chkbra yes) " " (celif (cddr a)))
-            (lns (lin "if (" ts ")" (chkbra yes))
-                 (celif (cddr a)))))))
-
-(def celif (a)
-  (if (no a) nil
-      (no (cdr a)) (lin "else " (chkbra (cmp (car a) 'if)))
-      (lns (lin "else if (" (cmp (car a) 'bot) ")"
-                (chkbra (cmp (cadr a) 'if)))
-           (celif (cddr a)))))|#
-
-;;; Types ;;;
-
 (def lin a
-  (linlis a))
+  (mklnobj 'lin {dat a}))
 
-(def linlis (a)
-  (tg 'lin {a a}))
+#| lines:
+(prn (proc (lns "" "test" "" "" "test"))) ->
+
+test
+
+
+test
+|#
 
 (def lns a
-  (lnslis a))
+  (mklnobj 'lns {dat a}))
 
-(def lnslis (a)
-  (tg 'lns {a a}))
+#| fresh lines:
+(prn (proc (flns "" "test" "" "" "test"))) ->
+test
+test
+|#
 
-(def lvllns a
-  (tg 'lvllns {a a}))
+(def flns a
+  (mklnobj 'flns {dat a}))
+
+#| level:
+(prn (proc (lin "test" (lvl "test" "" "abc")))) ->
+testtest
+    
+    abc
+|#
+
+(def lvl a
+  (mklnobj 'lvl {dat a}))
+
+#| level with indent on next lines:
+(prn (proc (lin "test" (lvlind 3 "testing" "abc" "def")))) ->
+testtesting
+       abc
+       def
+
+(mac lvlind (n fst . rst)
+  `(lvl ,fst (ind ,n ,@rst)))
+|#
+
+(def lvlind (n . a)
+  (mklnobj 'lvlind {dat a n n}))
+
+#| indent:
+(prn (proc (lns "test" (ind 3 "testing" (ind 2 "abc" "def")) "hey"))) ->
+test
+   testing
+     abc
+     def
+hey
+|#
 
 (def ind (n . a)
-  (indlis n a))
+  (mklnobj 'ind {dat a n n}))
 
-(def indlis (n a)
-  (tg 'ind {n n a a}))
-
-(def lvlind a
-  (tg 'lvlind {a a}))
+#| with indent:
+(prn (proc (lns "test" (ind 3 "testing" (wind 2 "abc" "def") "what") "hey"))) ->
+test
+   testing
+  abc
+  def
+   what
+hey
+|#
 
 (def wind (n . a)
-  (tg 'wind {n n a a}))
+  (mklnobj 'wind {dat a n n}))
 
+; return object: proc only uses dat property
 (def rt (tp a (o opt {}))
-  (tg 'rt {tp tp a a opt (app {orig a} opt)}))
+  (mklnobj 'rt {dat a tp tp opt (app {orig a} opt)}))
 
-(def geta (a)
-  (. (rp a) a))
-
-(def getn (a)
-  (. (rp a) n))
-
-(def gettp (a)
-  (. (rp a) tp))
-
-(def getopt (a)
-  (. (rp a) opt))
-
-(def getorig (a)
-  (. (getopt a) orig))
-
-(def mapa (f a)
-  (rt (gettp a) (f (geta a)) (getopt a)))
-
-(def isa (a x)
-  (is (typ a) x))
-
-(def lin? (a)
-  (isa a 'lin))
-
-(def lns? (a)
-  (isa a 'lns))
-
-(def lvllns? (a)
-  (isa a 'lvllns))
-
-(def ind? (a)
-  (isa a 'ind))
-
-(def lvlind? (a)
-  (isa a 'lvlind))
-
-(def wind? (a)
-  (isa a 'wind))
-
-(def rt? (a)
-  (isa a 'rt))
+; applies f to dat property of a
+(def mapdat (f a)
+  (mklnobj (. a typ) (app a {dat (f (. a dat))})))
 
 (over dsp (a)
   (sup (trans a)))
 
 (def trans (a)
   (case a
-    lin? `(lin ,@(trans (geta a)))
-    lns? `(lns ,@(trans (geta a)))
-    ind? `(ind ,(getn a) ,@(trans (geta a)))
-    rt?  `(rt ,(gettp a) ,(trans (geta a)))
+    obj? (case (. a typ)
+           'lin `(lin ,@(trans (. a dat)))
+           'lns `(lns ,@(trans (. a dat)))
+           'ind `(ind ,(. a n) ,@(trans (. a dat)))
+           'rt  `(rt ,(. a tp) ,(trans (. a dat))))
     lis? (map trans a)
     a))
 
@@ -542,20 +673,30 @@ lisp> (cmpp "(js-blk (js-do 1 2 3))")
 (var *indlvl* 0)
 (var *begline* t)
 (var *linepos* 0)
+(var *indented* nil)
+
+; don't send "\n" to emit
+; *begline* is t after \n is printed til the first text is emitted
+; *indented* is t after indentation til \n is printed
 
 (def emit (a)
-  ;(al "a = $1 | *indlvl* = $2 | *begline* = $3 | *linepos* = $4" a *indlvl* *begline* *linepos*)
-  (when *begline*
-    (pr (nof *indlvl* " "))
-    (+= *linepos* *indlvl*))
-  (pr a)
-  (+= *linepos* (len a))
-  (= *begline* nil))
+  ;(bugm 'emit a *indlvl* *begline* *linepos* *indented*)
+  (unless *indented* (emitind))
+  (unless (is a "")
+    (pr a)
+    (+= *linepos* (len a))
+    (= *begline* nil)))
+
+(def emitind ()
+  (pr (nof *indlvl* " "))
+  (+= *linepos* *indlvl*)
+  (= *indented* t))
 
 (def newln ()
   (pr "\n")
   (= *linepos* 0)
-  (= *begline* t))
+  (= *begline* t)
+  (= *indented* nil))
 
 (def freshln ()
   (unless *begline* (newln)))
@@ -564,6 +705,7 @@ lisp> (cmpp "(js-blk (js-do 1 2 3))")
   (= *indlvl* 0)
   (= *linepos* 0)
   (= *begline* t)
+  (= *indented* nil)
   nil)
 
 ;;; Process lines ;;;
@@ -571,77 +713,70 @@ lisp> (cmpp "(js-blk (js-do 1 2 3))")
 (def proc (a)
   (resetln)
   (tostr (proclin (lin a))))
-    
+
+; process any type
+(def proc1 (a)
+  (case a
+    obj?
+      (case (. a typ)
+        'lin (proclin a)
+        'lns (proclns a)
+        'flns (procflns a)
+        'lvl (proclvl a)
+        'ind (procind a)
+        'lvlind (proclvlind a)
+        'wind (procwind a)
+        'rt (proc1 (. a dat))
+        (err proc1 "Unknown type a = $1" a))
+    syn? (emit (str a))
+    str? (emit a)
+    (err proc1 "Unknown type a = $1" a)))
+
+; process lin objects
 (def proclin (a)
-  (each x (flata (geta a))
-    (unless (no x) (proclin1 x))))
+  (each x (rflat (. a dat))
+    (unless (no x) (proc1 x))))
 
-(def proclin1 (a)
-  (case a
-    lin? (proclin a)
-    lns? (proclns a)
-    lvllns? (dyn *indlvl* *linepos*
-              (proclns a))
-    ind? (procind a)
-    lvlind? (dyn *indlvl* *linepos*
-              (procind a))
-    wind? (procwind a)
-    rt? (proclin1 (geta a))
-    syn? (emit (str a))
-    str? (emit a)
-    (err proclin1 "Unknown type a = $1" a)))
-
+; process lns objects
 (def proclns (a)
-  (proclnslis (flata (geta a))))
-  
-(def proclnslis (a)
-  (if (no a) nil
-      (no (car a)) (proclnslis (cdr a))
-      (do (proclns1 (car a))
-          (proclnslis2 (cdr a)))))
-          
-(def proclnslis2 (a)
-  (if (no a) nil
-      (no (car a)) (proclnslis2 (cdr a))
-      (do (newln)
-          (proclns1 (car a))
-          (proclnslis2 (cdr a)))))
+  (var fst t)
+  (each x (rflat (. a dat))
+    (if (no x) (cont))
+    (if fst (= fst nil)
+        (newln))
+    (proc1 x)))
 
-(def proclns1 (a)
-  (case a
-    lin? (proclin a)
-    lns? (proclns a)
-    lvllns? (proclns a)
-    ind? (procind a)
-    lvlind? (procind a)
-    wind? (procwind a)
-    rt? (proclns1 (geta a))
-    syn? (emit (str a))
-    str? (emit a)
-    (err proclns1 "Unknown type a = $1" a)))
+; process flns objects
+(def procflns (a)
+  (var fst t)
+  (each x (rflat (. a dat))
+    (if (no x) (cont))
+    (if fst (= fst nil)
+        (freshln))
+    (proc1 x)))
+
+(def proclvl (a)
+  (dyn *indlvl* (if *indented* *linepos* *indlvl*)
+    (proclns a)))
+
+(def proclvlind (a)
+  (dyn *indlvl* (if *indented* *linepos* *indlvl*)
+    (procind a)))
 
 (def procind (a)
-  (dyn *indlvl* (+ *indlvl* (getn a))
-    (proclns (lns (geta a)))))
+  (dyn *indlvl* (+ *indlvl* (. a n))
+    (proclns (lns (. a dat)))))
 
 (def procwind (a)
-  (dyn *indlvl* (getn a)
-    (proclns (lns (geta a)))))
+  (dyn *indlvl* (. a n)
+    (proclns (lns (. a dat)))))
 
-(def flata (a)
+(def rflat (a)
   (if (no a) nil
-      (atm? (car a)) (cons (car a) (flata (cdr a)))
-      (app (flata (car a)) (flata (cdr a)))))
+      (atm? (car a)) (cons (car a) (rflat (cdr a)))
+      (app (rflat (car a)) (rflat (cdr a)))))
 
 ;;; Compile from str ;;;
-
-(def cmpprs (a)
-  (cmp1 (prs a)))
-
-(def prnproc (a)
-  (prn (proc a)))
-
-
 
 (def cmps (a)
   (cmp (prs a)))
