@@ -1,19 +1,20 @@
 (var mac (mc (nm ag . bd)
-           `(var ,nm (mc ,ag ,@bd))))
+           `(do (var ,nm (mc ,ag ,@bd))
+                (=nm ,nm ',nm))))
+(=nm mac 'mac)
 
 (mac def (nm ag . bd)
-  `(var ,nm (fn ,ag ,@bd)))
-
-(mac dot () `|.|)
+  `(do (var ,nm (fn ,ag ,@bd))
+       (=nm ,nm ',nm)))
 
 (def aqt (a) (lis 'qt a))
 (def auq (a) (lis 'uq a))
 
-(mac |.| (x . a)
+(mac . (x . a)
   (if (no a) x
-      `(|.| ,(let y (car a)
+      `(. ,(let y (car a)
                (if (atm? y) `(,x ',y)
-                   `((|.| ,x ,(car y)) ,@(cdr y))))
+                   `((. ,x ,(car y)) ,@(cdr y))))
           ,@(cdr a))))
 
 (mac byn (n nm op)
@@ -91,7 +92,8 @@
 
 (mac rfn (nm ag . bd)
   `(let ,nm nil
-     (= ,nm (fn ,ag ,@bd))))
+     (= ,nm (fn ,ag ,@bd))
+     (=nm ,nm ',nm)))
 
 (mac afn (ag . bd)
   `(rfn self ,ag ,@bd))
@@ -534,10 +536,10 @@
        (def ,(app pre 'lay) () (olay ,nm))
        (def ,(app pre 'ulay) () (oulay ,nm))))
 
-(def las (a)
+#|(def las (a)
   (if (no a) nil
       (no (cdr a)) (car a)
-      (las (cdr a))))
+      (las (cdr a))))|#
 
 (def but (a)
   (if (no a) nil

@@ -4,9 +4,9 @@ tools                 master:tools.js                 lib
 prec-math             master:prec-math.js             lib
 ajax                  master:ajax.js                  lib
 
-lisp-tools            master:lisp-tools.js            lib
-lisp-parse            master:lisp-parse.js            lib
-lisp-exec             master:lisp-exec.js             lib
-lisp-core             master:lisp-core.js             lib
-lisp-core             master:lisp-core.lisp           lib
-lisp-compile-basic    v2:lisp-compile-basic.lisp      lib
+lisp-tools            newrep:lisp-tools.js            lib
+lisp-parse            newrep:lisp-parse.js            lib
+lisp-exec             newrep:lisp-exec.js             lib
+lisp-core             newrep:lisp-core.js             lib
+lisp-core             newrep:lisp-core.lisp           lib
+#lisp-compile-basic    v2:lisp-compile-basic.lisp      lib
