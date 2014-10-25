@@ -205,6 +205,11 @@
           `(with ,(gslis (lis ,@gens) (lis ,@vs))
              ,(with ,(fla (par vs gens)) ,@bd))))))|#
 
+(def par (a b)
+  (if (no a) nil
+      (atm? a) (lis (lis a b))
+      (app (par (car a) (car b)) (par (cdr a) (cdr b)))))
+
 (mac once (vs . bd)
   (slis vs
     (ngs (len vs) gens
