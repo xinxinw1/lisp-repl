@@ -76,7 +76,7 @@ L.djn("*out*", function (a){
 
 //sefn(cmb(out, dmp));
 
-//L.evlf("lib/lisp-compile-basic.lisp");
+L.evlf("lib/lisp-compile-basic.lisp");
 
 //L.exe(get("/codes/apps/lisp-repl/devel7/lisp-test.lisp"));
 

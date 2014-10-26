@@ -9,4 +9,4 @@ lisp-parse            newrep:lisp-parse.js            lib
 lisp-exec             newrep:lisp-exec.js             lib
 lisp-core             newrep:lisp-core.js             lib
 lisp-core             newrep:lisp-core.lisp           lib
-#lisp-compile-basic    v2:lisp-compile-basic.lisp      lib
+lisp-compile-basic    v2:lisp-compile-basic.lisp      lib

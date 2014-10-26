@@ -369,7 +369,7 @@
       (and (sym? (car a)) (set? (car a)))
         (let m (evl (car a))
           (if (mac? m) (do (= mcxp t)
-                           (apl (rp m) (cdr a)))
+                           (apl (dat m) (cdr a)))
               (mcx1l a)))
       (mcx1l a)))
 
@@ -383,7 +383,7 @@
   (if (atm? a) a
       (and (sym? (car a)) (set? (car a)))
         (let m (evl (car a))
-          (if (mac? m) (mcx (apl (rp m) (cdr a)))
+          (if (mac? m) (mcx (apl (dat m) (cdr a)))
               (map mcx a)))
       (map mcx a)))
 
