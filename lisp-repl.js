@@ -1,9 +1,13 @@
 /***** Lisp REPL Devel *****/
 
 /* require tools >= 3.0 */
-/* require lisp-parse */
+/* require ajax */
+/* require prec-math */
 /* require lisp-tools */
+/* require lisp-parse */
 /* require lisp-exec */
+/* require lisp-core */
+/* require lisp-compile-basic */
 
 var udfp = $.udfp;
 var dmp = $.dmp;
@@ -65,12 +69,14 @@ satt(frm, "action",
     "rst();" +
     "out('Error: unknown (timeout?)'); ");
 
-L.jn("*out*", function (a){
-  ou(L.rp(L.str(a)));
-  return [];
+L.djn("*out*", function (a){
+  ou(L.dat(L.str(a)));
+  return L.nil();
 });
 
-sefn(cmb(out, dmp));
+//sefn(cmb(out, dmp));
+
+L.evlf("lib/lisp-compile-basic/lisp-compile-basic.lisp");
 
 //L.exe(get("/codes/apps/lisp-repl/devel7/lisp-test.lisp"));
 
