@@ -6,5 +6,5 @@ input {width: 100%;}
 #page {position: fixed; top: 0; right: 0; bottom: 0; left: 0; overflow: auto;}
 #results {white-space: pre-wrap;}
 #tag, #form-area {display: table-cell;}
-#tag {padding-right: 8px;}
+#tag {padding-right: 8px; white-space: nowrap;}
 #form-area {width: 100%;}

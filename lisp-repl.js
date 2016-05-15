@@ -15,7 +15,7 @@ var len = $.len;
 var inp = $.inp;
 var psh = $.psh;
 var rpl = $.rpl;
-var satt = $.satt;
+var satr = $.satr;
 var bot = $.bot;
 var atth = $.atth;
 var cmb = $.cmb;
@@ -26,26 +26,30 @@ var it = $("input");
 var res = $("results");
 var pg = $("page");
 
+var his = $.his(it);
+
 function run(a){
-  his(a);
+  his.add(a);
   out("JS-LISP> " + a);
   rst();
   
-  try {
-    out(L.evls(a));
-  } catch (e){
-    // taken care of by efn(e)
-    out(dmp(e));
-  }
+  time(function (){
+    try {
+      out(L.evls(a));
+    } catch (e){
+      // taken care of by efn(e)
+      out(e.message);
+    }
+  });
 }
 
 function ou(a){
-  atth(esc(a), res);
+  atth(res, esc(a));
   bot(pg);
 }
 
 function out(a){
-  atth(esc(a) + "<br>", res);
+  atth(res, esc(a) + "<br>");
   bot(pg);
 }
 
@@ -63,7 +67,7 @@ frm.onsubmit = function (){
   return false;
 };
 
-satt(frm, "action",
+satr(frm, "action",
   "javascript:" +
     "out('JS-LISP> ' + it.value);" +
     "rst();" +
@@ -74,45 +78,20 @@ L.djn("*out*", function (a){
   return L.nil();
 });
 
+function settime(a){
+  $("time").innerHTML = a;
+}
+
+function time(a){
+  settime($.tim(a));
+}
+
 //sefn(cmb(out, dmp));
 
-L.evlf("lib/lisp-compile-basic/lisp-compile-basic.lisp");
+/*time(function (){
+  L.evlf($.libdir + "/lisp-format/lisp-format.lisp");
+  L.evlf($.libdir + "/lisp-compile-basic/lisp-compile-basic.lisp");
+});*/
 
 //L.exe(get("/codes/apps/lisp-repl/devel7/lisp-test.lisp"));
 
-var hs = [];
-var p = 0;
-var tmp = "";
-
-function his(a){
-  psh(a, hs);
-  p = len(hs);
-}
-
-function pre(){
-  if (p > 0){
-    if (p == len(hs))tmp = it.value;
-    p--;
-    it.value = hs[p];
-  }
-}
-
-function nex(){
-  if (p <= len(hs)-1){
-    p++;
-    it.value = (p == len(hs))?tmp:hs[p];
-  }
-}
-
-it.onkeydown = function (e){
-  var c = udfp(e.key)?e.keyCode:e.key;
-  if (inp(c, "Up", 38)){
-    pre();
-    return false;
-  }
-  if (inp(c, "Down", 40)){
-    nex();
-    return false;
-  }
-  return true;
-};
