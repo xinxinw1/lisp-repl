@@ -38,6 +38,7 @@ function run(a){
       out(L.evls(a));
     } catch (e){
       // taken care of by efn(e)
+      console.log(e);
       out(e.message);
     }
   });
