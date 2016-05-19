@@ -1,21 +1,21 @@
 [submodule "lib/tools"]
 	path = lib/tools
-	url = git@github.com:xinxinw1/tools
+	url = https://github.com/xinxinw1/tools.git
 [submodule "lib/ajax"]
 	path = lib/ajax
-	url = git@github.com:xinxinw1/ajax
+	url = https://github.com/xinxinw1/ajax.git
 [submodule "lib/prec-math"]
 	path = lib/prec-math
-	url = git@github.com:xinxinw1/prec-math
+	url = https://github.com/xinxinw1/prec-math.git
 [submodule "lib/lisp-tools"]
 	path = lib/lisp-tools
-	url = git@github.com:xinxinw1/lisp-tools
+	url = https://github.com/xinxinw1/lisp-tools.git
 [submodule "lib/lisp-parse"]
 	path = lib/lisp-parse
-	url = git@github.com:xinxinw1/lisp-parse
+	url = https://github.com/xinxinw1/lisp-parse.git
 [submodule "lib/lisp-exec"]
 	path = lib/lisp-exec
-	url = git@github.com:xinxinw1/lisp-exec
+	url = https://github.com/xinxinw1/lisp-exec.git
 [submodule "lib/lisp-core"]
 	path = lib/lisp-core
-	url = git@github.com:xinxinw1/lisp-core
+	url = https://github.com/xinxinw1/lisp-core.git
