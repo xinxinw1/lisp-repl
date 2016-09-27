@@ -30,13 +30,14 @@ var his = $.his(it);
 
 out("Welcome to Xin-Xin's Javascript Lisp! Here are some example commands you can run: \n\n"
     + "(+ 2 2)\n"
-    + "=> 4\n"
+    + "=> 4\n\n"
     + "(map [+ _ 1] '(1 2 3))\n"
-    + "=> (2 3 4)\n"
-    + "(do (def fact (n)\n"
-    + "      (if (is n 0) 1\n"
-    + "          (* n (fact (- n 1)))))\n"
-    + "    (fact 5))\n"
+    + "=> (2 3 4)\n\n"
+    + "(def fact (n)\n"
+    + "  (if (is n 0) 1\n"
+    + "      (* n (fact (- n 1)))))\n"
+    + "=> <fn fact (n)>\n"
+    + "(fact 5)\n"
     + "=> 120\n\n");
 outNoEsc("This project is on Github at <a href=\"https://github.com/xinxinw1/lisp-repl\">https://github.com/xinxinw1/lisp-repl</a>\n"
     + "and you can find more examples there as well.\n");
