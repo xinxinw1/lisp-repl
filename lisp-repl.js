@@ -28,6 +28,19 @@ var pg = $("page");
 
 var his = $.his(it);
 
+out("Welcome to Xin-Xin's Javascript Lisp! Here are some example commands you can run: \n\n"
+    + "(+ 2 2)\n"
+    + "=> 4\n"
+    + "(map [+ _ 1] '(1 2 3))\n"
+    + "=> (2 3 4)\n"
+    + "(do (def fact (n)\n"
+    + "      (if (is n 0) 1\n"
+    + "          (* n (fact (- n 1)))))\n"
+    + "    (fact 5))\n"
+    + "=> 120\n\n");
+outNoEsc("This project is on Github at <a href=\"https://github.com/xinxinw1/lisp-repl\">https://github.com/xinxinw1/lisp-repl</a>\n"
+    + "and you can find more examples there as well.\n");
+
 function run(a){
   his.add(a);
   out("JS-LISP> " + a);
@@ -51,6 +64,11 @@ function ou(a){
 
 function out(a){
   atth(res, esc(a) + "<br>");
+  bot(pg);
+}
+
+function outNoEsc(a){
+  atth(res, a + "<br>");
   bot(pg);
 }
 

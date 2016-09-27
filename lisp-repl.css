@@ -8,3 +8,5 @@ input {width: 100%;}
 #tag, #form-area {display: table-cell;}
 #tag {padding-right: 8px; white-space: nowrap;}
 #form-area {width: 100%;}
+
+a {color: #005EC8;}
