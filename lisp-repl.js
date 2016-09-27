@@ -1,4 +1,4 @@
-/***** Lisp REPL Devel *****/
+/***** Lisp REPL *****/
 
 /* require tools >= 3.0 */
 /* require ajax */
